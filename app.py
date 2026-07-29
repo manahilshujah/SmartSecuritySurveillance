@@ -6,6 +6,7 @@ camera = cv2.VideoCapture(0)
 while True:
     # Read one frame from the webcam
     success, frame = camera.read()
+    frame = cv2.flip(frame, 1)
 
     # If the camera couldn't provide a frame, stop
     if not success:
