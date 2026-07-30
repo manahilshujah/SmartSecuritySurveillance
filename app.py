@@ -1,25 +1,30 @@
 import cv2
 
-# Open the default webcam (0 = built-in camera)
 camera = cv2.VideoCapture(0)
 
+printed = False
+
 while True:
-    # Read one frame from the webcam
     success, frame = camera.read()
     frame = cv2.flip(frame, 1)
 
-    # If the camera couldn't provide a frame, stop
+
     if not success:
-        print("Error: Could not read from the camera.")
+        print("Unable to access camera.")
         break
 
-    # Display the frame
-    cv2.imshow("Smart Security Surveillance System", frame)
+    # Print information only once
+    if not printed:
+        print("Type:", type(frame))
+        print("Shape:", frame.shape)
+        print("Data Type:", frame.dtype)
+        print("Top-left pixel:", frame[0, 0])
+        printed = True
 
-    # Exit when the user presses the Q key
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    cv2.imshow("Smart Security Surveillance", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
-# Release the camera and close all windows
 camera.release()
 cv2.destroyAllWindows()
