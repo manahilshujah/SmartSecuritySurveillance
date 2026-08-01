@@ -3,6 +3,7 @@ import os
 import time
 from datetime import datetime
 from ultralytics import YOLO
+from database import initialize_database, insert_detection
 
 # ==========================
 # Load YOLO Model
@@ -19,6 +20,11 @@ camera = cv2.VideoCapture(0)
 # ==========================
 os.makedirs("screenshots", exist_ok=True)
 os.makedirs("logs", exist_ok=True)
+
+# ==========================
+# Initialize Database
+# ==========================
+initialize_database()
 
 # ==========================
 # Surveillance Settings
@@ -45,7 +51,7 @@ while True:
     frame = cv2.flip(frame, 1)
 
     # Run YOLO
-    results = model(frame, conf=0.6)
+    results = model(frame, conf=0.6, verbose=False)
 
     annotated_frame = results[0].plot()
 
@@ -77,6 +83,8 @@ while True:
 
     current_time = time.time()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_clock = datetime.now().strftime("%H:%M:%S")
 
     # ==========================
     # Person detected
@@ -105,6 +113,15 @@ while True:
                     f"Image: {filename}\n"
                 )
 
+            insert_detection(
+                current_date,
+                current_clock,
+                "Person Detected",
+                person_count,
+                highest_confidence,
+                filename
+            )
+
         elif current_time - last_save_time >= SAVE_INTERVAL:
 
             last_save_time = current_time
@@ -124,12 +141,20 @@ while True:
                     f"Image: {filename}\n"
                 )
 
+            insert_detection(
+                current_date,
+                current_clock,
+                "Person Still Present",
+                person_count,
+                highest_confidence,
+                filename
+            )
+
     # ==========================
     # Area cleared
     # ==========================
     elif person_present:
 
-        # Wait before deciding area is clear
         if current_time - last_person_time >= CLEAR_DELAY:
 
             person_present = False
@@ -146,6 +171,15 @@ while True:
                     f"{datetime.now()} | Area Cleared | "
                     f"Image: {filename}\n"
                 )
+
+            insert_detection(
+                current_date,
+                current_clock,
+                "Area Cleared",
+                0,
+                0.0,
+                filename
+            )
 
     cv2.imshow("Smart Security Surveillance System", annotated_frame)
 
