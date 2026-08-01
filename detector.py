@@ -23,9 +23,12 @@ os.makedirs("logs", exist_ok=True)
 # ==========================
 # Surveillance Settings
 # ==========================
-SAVE_INTERVAL = 5  # seconds
+SAVE_INTERVAL = 5          # Save screenshot every 5 seconds
+CLEAR_DELAY = 3            # Wait 3 seconds before declaring area cleared
 
 last_save_time = 0
+last_person_time = time.time()
+
 person_present = False
 
 # ==========================
@@ -39,21 +42,19 @@ while True:
         print("Unable to access camera.")
         break
 
-    # Mirror effect
     frame = cv2.flip(frame, 1)
 
     # Run YOLO
     results = model(frame, conf=0.6)
 
-    # Draw detections
     annotated_frame = results[0].plot()
 
-    # Count people
     person_count = 0
+    highest_confidence = 0.0
 
-    # --------------------------
+    # ----------------------------------
     # Process detections
-    # --------------------------
+    # ----------------------------------
     for box in results[0].boxes:
 
         class_id = int(box.cls[0])
@@ -63,6 +64,9 @@ while True:
         if class_name == "person":
 
             person_count += 1
+
+            if confidence > highest_confidence:
+                highest_confidence = confidence
 
             print("----------------------------")
             print("Object:", class_name)
@@ -74,30 +78,34 @@ while True:
     current_time = time.time()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # ============================================================
-    # EVENT 1 : Person enters
-    # ============================================================
-    if person_count > 0 and not person_present:
+    # ==========================
+    # Person detected
+    # ==========================
+    if person_count > 0:
 
-        person_present = True
-        last_save_time = current_time
+        last_person_time = current_time
 
-        filename = f"screenshots/person_{timestamp}.jpg"
+        if not person_present:
 
-        cv2.imwrite(filename, annotated_frame)
+            person_present = True
+            last_save_time = current_time
 
-        print(f"[EVENT] Person detected")
-        print(f"Screenshot saved: {filename}")
+            filename = f"screenshots/person_{timestamp}.jpg"
 
-        with open("logs/detection_log.txt", "a") as file:
-            file.write(f"{datetime.now()} : Person detected\n")
+            cv2.imwrite(filename, annotated_frame)
 
-    # ============================================================
-    # EVENT 2 : Person still present
-    # ============================================================
-    elif person_count > 0 and person_present:
+            print("[EVENT] Person detected")
+            print("Screenshot saved:", filename)
 
-        if current_time - last_save_time >= SAVE_INTERVAL:
+            with open("logs/detection_log.txt", "a") as file:
+                file.write(
+                    f"{datetime.now()} | Person Detected | "
+                    f"People: {person_count} | "
+                    f"Confidence: {highest_confidence:.2f} | "
+                    f"Image: {filename}\n"
+                )
+
+        elif current_time - last_save_time >= SAVE_INTERVAL:
 
             last_save_time = current_time
 
@@ -105,38 +113,44 @@ while True:
 
             cv2.imwrite(filename, annotated_frame)
 
-            print(f"[EVENT] Person still present")
-            print(f"Screenshot saved: {filename}")
+            print("[EVENT] Person still present")
+            print("Screenshot saved:", filename)
 
             with open("logs/detection_log.txt", "a") as file:
-                file.write(f"{datetime.now()} : Person still present\n")
+                file.write(
+                    f"{datetime.now()} | Person Still Present | "
+                    f"People: {person_count} | "
+                    f"Confidence: {highest_confidence:.2f} | "
+                    f"Image: {filename}\n"
+                )
 
-    # ============================================================
-    # EVENT 3 : Area cleared
-    # ============================================================
-    elif person_count == 0 and person_present:
+    # ==========================
+    # Area cleared
+    # ==========================
+    elif person_present:
 
-        person_present = False
+        # Wait before deciding area is clear
+        if current_time - last_person_time >= CLEAR_DELAY:
 
-        filename = f"screenshots/area_cleared_{timestamp}.jpg"
+            person_present = False
 
-        cv2.imwrite(filename, annotated_frame)
+            filename = f"screenshots/area_cleared_{timestamp}.jpg"
 
-        print("[EVENT] Area cleared")
-        print(f"Screenshot saved: {filename}")
+            cv2.imwrite(filename, annotated_frame)
 
-        with open("logs/detection_log.txt", "a") as file:
-            file.write(f"{datetime.now()} : Area cleared\n")
+            print("[EVENT] Area cleared")
+            print("Screenshot saved:", filename)
 
-    # Display output
+            with open("logs/detection_log.txt", "a") as file:
+                file.write(
+                    f"{datetime.now()} | Area Cleared | "
+                    f"Image: {filename}\n"
+                )
+
     cv2.imshow("Smart Security Surveillance System", annotated_frame)
 
-    # Exit on Q
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
-# ==========================
-# Cleanup
-# ==========================
 camera.release()
 cv2.destroyAllWindows()
