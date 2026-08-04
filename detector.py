@@ -11,6 +11,18 @@ from database import initialize_database, insert_detection
 model = YOLO("yolov8n.pt")
 
 # ==========================
+# Load Face Detector (Haar Cascade)
+# ==========================
+face_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+)
+
+# Check if the face detector loaded correctly
+if face_cascade.empty():
+    print("Error: Face detector could not be loaded!")
+    exit()
+
+# ==========================
 # Open Webcam
 # ==========================
 camera = cv2.VideoCapture(0)
@@ -20,6 +32,7 @@ camera = cv2.VideoCapture(0)
 # ==========================
 os.makedirs("screenshots", exist_ok=True)
 os.makedirs("logs", exist_ok=True)
+os.makedirs("faces", exist_ok=True)
 
 # ==========================
 # Initialize Database
@@ -35,6 +48,10 @@ CLEAR_DELAY = 3            # Wait 3 seconds before declaring area cleared
 last_save_time = 0
 last_person_time = time.time()
 
+# Save face every 2 seconds to avoid thousands of images
+FACE_SAVE_INTERVAL = 2
+last_face_save = 0
+
 person_present = False
 
 # ==========================
@@ -48,19 +65,60 @@ while True:
         print("Unable to access camera.")
         break
 
+    # Mirror effect
     frame = cv2.flip(frame, 1)
 
-    # Run YOLO
+    # ==========================
+    # YOLO Person Detection
+    # ==========================
     results = model(frame, conf=0.6, verbose=False)
 
     annotated_frame = results[0].plot()
 
+    # ==========================
+    # Face Detection
+    # ==========================
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    faces = face_cascade.detectMultiScale(
+        gray,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(60, 60)
+    )
+
+    # Draw face boxes
+    for (x, y, w, h) in faces:
+
+        cv2.rectangle(
+            annotated_frame,
+            (x, y),
+            (x + w, y + h),
+            (0, 255, 0),
+            2
+        )
+
+        # Save cropped face every few seconds
+        if time.time() - last_face_save >= FACE_SAVE_INTERVAL:
+
+            face = frame[y:y+h, x:x+w]
+
+            face_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+
+            face_filename = f"faces/face_{face_timestamp}.jpg"
+
+            cv2.imwrite(face_filename, face)
+
+            last_face_save = time.time()
+
+            print(f"[FACE] Saved: {face_filename}")
+
+    # ==========================
+    # Person Detection
+    # ==========================
     person_count = 0
     highest_confidence = 0.0
 
-    # ----------------------------------
-    # Process detections
-    # ----------------------------------
     for box in results[0].boxes:
 
         class_id = int(box.cls[0])
@@ -79,6 +137,7 @@ while True:
             print(f"Confidence: {confidence:.2f}")
 
     print(f"People detected: {person_count}")
+    print(f"Faces detected: {len(faces)}")
     print("============================")
 
     current_time = time.time()
@@ -87,7 +146,7 @@ while True:
     current_clock = datetime.now().strftime("%H:%M:%S")
 
     # ==========================
-    # Person detected
+    # Person Detected
     # ==========================
     if person_count > 0:
 
@@ -151,7 +210,7 @@ while True:
             )
 
     # ==========================
-    # Area cleared
+    # Area Cleared
     # ==========================
     elif person_present:
 
@@ -181,10 +240,16 @@ while True:
                 filename
             )
 
+    # ==========================
+    # Display Output
+    # ==========================
     cv2.imshow("Smart Security Surveillance System", annotated_frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
+# ==========================
+# Cleanup
+# ==========================
 camera.release()
 cv2.destroyAllWindows()
