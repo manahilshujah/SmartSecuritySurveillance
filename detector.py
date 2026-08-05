@@ -33,6 +33,7 @@ camera = cv2.VideoCapture(0)
 os.makedirs("screenshots", exist_ok=True)
 os.makedirs("logs", exist_ok=True)
 os.makedirs("faces", exist_ok=True)
+os.makedirs("videos", exist_ok=True)
 
 # ==========================
 # Initialize Database
@@ -53,6 +54,13 @@ FACE_SAVE_INTERVAL = 2
 last_face_save = 0
 
 person_present = False
+
+# ==========================
+# Video Recording
+# ==========================
+recording = False
+video_writer = None
+video_filename = ""
 
 # ==========================
 # Main Loop
@@ -157,6 +165,26 @@ while True:
             person_present = True
             last_save_time = current_time
 
+            # Start video recording
+            if not recording:
+
+               video_filename = f"videos/video_{timestamp}.avi"
+               fourcc = cv2.VideoWriter_fourcc(*"XVID")
+               fps = 20
+
+               height, width = annotated_frame.shape[:2]
+
+               video_writer = cv2.VideoWriter(
+                    video_filename,
+                    fourcc,
+                    fps,
+                    (width, height)
+                )
+
+               recording = True
+
+               print("[VIDEO] Recording started")
+
             filename = f"screenshots/person_{timestamp}.jpg"
 
             cv2.imwrite(filename, annotated_frame)
@@ -178,7 +206,8 @@ while True:
                 "Person Detected",
                 person_count,
                 highest_confidence,
-                filename
+                filename,
+                video_filename
             )
 
         elif current_time - last_save_time >= SAVE_INTERVAL:
@@ -206,7 +235,8 @@ while True:
                 "Person Still Present",
                 person_count,
                 highest_confidence,
-                filename
+                filename,
+                video_filename
             )
 
     # ==========================
@@ -237,9 +267,23 @@ while True:
                 "Area Cleared",
                 0,
                 0.0,
-                filename
+                filename,
+                video_filename
             )
+    if recording:
+        video_writer.write(annotated_frame)
+        if current_time - last_person_time >= CLEAR_DELAY:
+            person_present = False
+            if recording:
 
+               recording = False
+
+               video_writer.release()
+
+               video_writer = None
+
+               print("[VIDEO] Recording stopped")
+               print("[VIDEO] Saved:", video_filename)
     # ==========================
     # Display Output
     # ==========================
@@ -251,5 +295,8 @@ while True:
 # ==========================
 # Cleanup
 # ==========================
+if video_writer is not None:
+    video_writer.release()
+
 camera.release()
 cv2.destroyAllWindows()
